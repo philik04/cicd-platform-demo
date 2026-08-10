@@ -257,7 +257,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.workspace }}
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.29.0
+        # Pinned to a commit SHA (not just a tag) since this action has
+        # security-events: write access to the Security tab - verified
+        # against the official v0.36.0 release tag:
+        # https://github.com/aquasecurity/trivy-action/releases/tag/v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}:scan
           format: sarif
