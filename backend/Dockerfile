@@ -26,7 +26,14 @@ FROM node:20-alpine AS production
 WORKDIR /app
 RUN apk add --no-cache openssl \
     && addgroup -S appgroup \
-    && adduser -S appuser -G appgroup
+    && adduser -S appuser -G appgroup \
+    # npm is not used at runtime (the entrypoint invokes Prisma's CLI
+    # directly via node - see docker/backend-entrypoint.sh) and Trivy
+    # otherwise flags CVEs in npm's own bundled dependencies, not ours.
+    # node itself is untouched; only npm/npx and their package directory
+    # go.
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=build --chown=appuser:appgroup /app/dist ./dist
 COPY --from=build --chown=appuser:appgroup /app/node_modules ./node_modules

@@ -20,7 +20,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ---- production: static assets served by an unprivileged nginx ----
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS production
+FROM nginxinc/nginx-unprivileged:1.30-alpine AS production
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html

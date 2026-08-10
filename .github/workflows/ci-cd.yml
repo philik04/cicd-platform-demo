@@ -231,6 +231,9 @@ jobs:
       contents: read
       security-events: write
     strategy:
+      # Both images' scans should run and report to the Security tab
+      # independently - one failing shouldn't hide whether the other passed.
+      fail-fast: false
       matrix:
         include:
           - workspace: backend
