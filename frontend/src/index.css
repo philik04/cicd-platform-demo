@@ -1,0 +1,160 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-text: #e2e8f0;
+  --color-muted: #94a3b8;
+  --color-border: #334155;
+  --color-accent: #38bdf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.app {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.app__header h1 {
+  margin-bottom: 0.25rem;
+}
+
+.app__header p {
+  color: var(--color-muted);
+  margin-top: 0;
+}
+
+.app__main {
+  display: grid;
+  gap: 2.5rem;
+  margin-top: 2rem;
+}
+
+.service-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.service-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.service-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.service-card__header h3 {
+  margin: 0;
+}
+
+.service-card__description {
+  color: var(--color-muted);
+  margin: 0.5rem 0 0;
+}
+
+.service-card__link {
+  color: var(--color-accent);
+  font-size: 0.85rem;
+}
+
+.status-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.status-badge--operational {
+  background: #14532d;
+  color: #86efac;
+}
+
+.status-badge--degraded {
+  background: #713f12;
+  color: #fde047;
+}
+
+.status-badge--outage {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.status-badge--maintenance {
+  background: #1e3a8a;
+  color: #93c5fd;
+}
+
+.add-service-form {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+  max-width: 420px;
+}
+
+.add-service-form h2 {
+  margin-top: 0;
+}
+
+.add-service-form label {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.add-service-form input,
+.add-service-form select {
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.add-service-form button {
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 6px;
+  border: none;
+  background: var(--color-accent);
+  color: #0f172a;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-service-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-error {
+  color: #fca5a5;
+  font-size: 0.85rem;
+}
+
+.empty-state {
+  color: var(--color-muted);
+}

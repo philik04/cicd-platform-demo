@@ -1,0 +1,74 @@
+# Production compose file used on the EC2 host. Unlike docker-compose.yml
+# (local dev, builds from source), this pulls pre-built, scanned images from
+# GHCR. The CI/CD pipeline sets BACKEND_IMAGE / FRONTEND_IMAGE to a specific
+# commit SHA tag before running `docker compose pull`; a real .env file with
+# database credentials must already exist on the host (see docs/deployment.md).
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-cicd_platform_demo}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cicd_platform_demo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - platform
+
+  backend:
+    # No fallback tag on purpose: if BACKEND_IMAGE isn't exported (e.g. an
+    # operator forgets to set it before a manual `docker compose` command),
+    # this must fail loudly rather than silently resolve to an unset/`latest`
+    # image and deploy the wrong build.
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be set to a commit-SHA-tagged image, e.g. ghcr.io/<owner>/cicd-platform-demo-backend:<sha>}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cicd_platform_demo}?schema=public
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN must be set}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+    healthcheck:
+      test: ["CMD", "node", "/app/healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - platform
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE must be set to a commit-SHA-tagged image, e.g. ghcr.io/<owner>/cicd-platform-demo-frontend:<sha>}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - platform
+
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+  postgres-data:

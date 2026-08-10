@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars and fill in your own values.
+# terraform.tfvars is gitignored - never commit it.
+
+aws_region   = "us-east-1"
+project_name = "cicd-platform-demo"
+environment  = "demo"
+
+instance_type = "t3.micro"
+
+# Name of an EC2 key pair that already exists in this AWS account/region.
+ssh_key_name = "cicd-platform-demo"
+
+# Restrict this to your own IP, e.g. "203.0.113.10/32".
+# Find it with: curl -s https://checkip.amazonaws.com
+ssh_allowed_cidr = "203.0.113.10/32"
+
+app_port = 80
