@@ -43,7 +43,7 @@ variable "instance_type" {
 variable "root_volume_size_gb" {
   description = "Root EBS volume size in GB."
   type        = number
-  default     = 20
+  default     = 30
 }
 
 variable "ssh_key_name" {
