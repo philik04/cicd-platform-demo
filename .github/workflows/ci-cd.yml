@@ -10,6 +10,7 @@ on:
 # Least-privilege by default; individual jobs elevate only what they need.
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ci-cd-${{ github.ref }}
