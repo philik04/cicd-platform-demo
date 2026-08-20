@@ -337,51 +337,84 @@ jobs:
     needs: [push-images]
     environment:
       name: production
-    # No GITHUB_TOKEN use in this job (see the "No `docker login`" note
-    # below), so it needs nothing beyond the default read access to check
-    # out docker-compose.prod.yml.
     permissions:
       contents: read
+      id-token: write
+
     steps:
       - uses: actions/checkout@v4
 
-      # docker-compose.prod.yml is versioned in git, not hand-edited on the
-      # host, so every deploy ships the exact file that matches this commit.
-      - name: Copy docker-compose.prod.yml to the host
-        uses: appleboy/scp-action@v0.1.7
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_SSH_USER }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          source: docker-compose.prod.yml
-          target: /opt/cicd-platform-demo
-          strip_components: 0
+          role-to-assume: arn:aws:iam::881893826765:role/cicd-platform-demo-github-actions-role
+          aws-region: us-east-1
 
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_SSH_USER }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          # BACKEND_IMAGE/FRONTEND_IMAGE are pinned to this commit's SHA so
-          # the host always runs the exact image built and scanned above -
-          # never a mutable `latest` that could drift from what was tested.
-          # POSTGRES_PASSWORD/CORS_ORIGIN etc. come from a `.env` file that
-          # must already exist in /opt/cicd-platform-demo on the host (see
-          # docs/deployment.md) - it is deliberately not managed by CI.
-          #
-          # No `docker login` here, deliberately: the GHCR packages this
-          # pipeline pushes to are public (same content as this public repo -
-          # nothing is disclosed by the image that isn't already visible in
-          # source), so pulling is anonymous. No GHCR credential of any kind
-          # is ever written to this host. See docs/deployment.md for the
-          # one-time package-visibility step and the private-registry
-          # alternative if you fork this for a closed-source project.
-          script: |
-            set -e
-            cd /opt/cicd-platform-demo
-            export BACKEND_IMAGE="${{ env.BACKEND_IMAGE }}:${{ github.sha }}"
-            export FRONTEND_IMAGE="${{ env.FRONTEND_IMAGE }}:${{ github.sha }}"
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker image prune -f
+      - name: Deploy to EC2 via Systems Manager
+        env:
+          EC2_INSTANCE_ID: i-0e3e99eb06727e49b
+          COMPOSE_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/docker-compose.prod.yml
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -euo pipefail
+          cd /opt/cicd-platform-demo
+
+          curl -fsSL "$COMPOSE_URL" -o docker-compose.prod.yml
+
+          export BACKEND_IMAGE="$BACKEND_IMAGE"
+          export FRONTEND_IMAGE="$FRONTEND_IMAGE"
+
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          docker image prune -f
+          EOF
+          )
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy ${{ github.sha }}" \
+            --parameters "$(jq -n --arg commands "$REMOTE_SCRIPT" '{commands: [$commands]}')" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "SSM command: $COMMAND_ID"
+
+          for i in {1..60}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query 'Status' \
+              --output text)
+
+            echo "SSM status: $STATUS"
+
+            case "$STATUS" in
+              Success)
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$EC2_INSTANCE_ID" \
+                  --query 'StandardOutputContent' \
+                  --output text
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                echo "Deployment failed."
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$EC2_INSTANCE_ID" \
+                  --query 'StandardErrorContent' \
+                  --output text
+                exit 1
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for SSM command."
+          exit 1
