@@ -14,7 +14,8 @@ for what a production version would add.
 | `aws_internet_gateway` + `aws_route_table` | Internet egress/ingress for the public subnet |
 | `aws_subnet` (public) | Where the EC2 instance runs |
 | `aws_security_group` | Allows SSH (restricted CIDR), HTTP (app port), and all outbound |
-| `aws_iam_role` + `aws_iam_instance_profile` | Grants the instance SSM Session Manager access only - no application-level AWS permissions |
+| `aws_iam_role.instance` + `aws_iam_instance_profile` | Grants the EC2 instance SSM Session Manager access only - no application-level AWS permissions |
+| `aws_iam_openid_connect_provider.github_actions` + `aws_iam_role.github_actions` | Lets GitHub Actions authenticate to AWS via OIDC (no stored AWS credentials) to deploy - see [`docs/deployment.md`](../../docs/deployment.md#authenticating-to-aws-openid-connect-oidc) |
 | `aws_instance` | Amazon Linux 2023 EC2 host running Docker + Docker Compose |
 | `aws_eip` | Stable public IP for the instance |
 
@@ -37,6 +38,11 @@ only from the backend container over the internal Docker Compose network
   ```
 
 ## AWS authentication
+
+This section covers how *you*, running Terraform locally, authenticate to
+AWS. GitHub Actions authenticates separately, via OIDC, to deploy - that's
+a distinct mechanism with no credentials for you to configure; see
+[`docs/deployment.md`](../../docs/deployment.md#authenticating-to-aws-openid-connect-oidc).
 
 Terraform's AWS provider reads credentials the same way the AWS CLI does -
 **never hardcode credentials in `.tf` files**. Use one of:
@@ -110,11 +116,15 @@ first boot via cloud-init. That script:
 4. Creates `/opt/<project_name>` as the deployment directory
 
 The script does **not** pull or start the application - that's the CI/CD
-pipeline's job (see `.github/workflows/ci-cd.yml`, `deploy` job), which SSHes
-in, places `docker-compose.prod.yml` and an `.env` file in `/opt/<project_name>`,
-and runs `docker compose pull && docker compose up -d`. See
-[`../../docs/deployment.md`](../../docs/deployment.md) for the full picture,
-including what needs to exist on the host before the first deploy.
+pipeline's job (see `.github/workflows/ci-cd.yml`, `deploy` job), which
+authenticates to AWS via OIDC and runs a script on the instance through AWS
+Systems Manager Run Command (not SSH) that fetches the versioned
+`docker-compose.prod.yml` for that exact commit and runs
+`docker compose pull && docker compose up -d`. The `.env` file with database
+credentials is a separate, one-time human step - never written by CI. See
+[`../../docs/deployment.md`](../../docs/deployment.md) for the full
+picture, including what needs to exist on the host before the first
+deploy and how the OIDC/SSM mechanism works.
 
 ## Security notes
 
@@ -124,6 +134,14 @@ including what needs to exist on the host before the first deploy.
   enough for troubleshooting via Session Manager, nothing else. The
   application does not call any AWS APIs and has no AWS credentials of its
   own.
+- The separate GitHub Actions role (`github_actions`) that CI assumes via
+  OIDC to deploy is scoped to `ssm:SendCommand` and
+  `ssm:GetCommandInvocation` only - it cannot touch any other AWS resource.
+  Its trust policy restricts assumption to this repository's `production`
+  environment via the `sub` claim, using GitHub's newer immutable-subject-claim
+  format (`repo:OWNER@OWNER-ID/REPO@REPO-ID:...`, not just `owner/repo`) - see
+  [`docs/deployment.md`](../../docs/deployment.md#the-trust-policy-the-sub-claims-ownerrepo-id-format)
+  for how that's verified.
 - The root volume is encrypted at rest.
 - SSH is restricted by CIDR via a required variable with no permissive
   default; the HTTP port is intentionally the only other inbound rule.

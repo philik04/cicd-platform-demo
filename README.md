@@ -72,7 +72,10 @@ flowchart LR
     end
 
     Push --> GHCR["GitHub Container Registry"]
-    GHCR --> EC2["AWS EC2"]
+    Actions -->|OIDC, no stored credentials| STS["AWS STS"]
+    STS -->|assumes role| SSM["AWS Systems Manager<br/>Run Command"]
+    SSM -->|deploys| EC2["AWS EC2"]
+    GHCR -.->|image pull| EC2
 
     subgraph Host["Docker Compose"]
         Frontend["React + nginx"]
@@ -87,10 +90,10 @@ flowchart LR
 
     Terraform["Terraform"] -->|provisions| EC2
     Terraform --> VPC["VPC + Security Group"]
-    Terraform --> IAM["IAM Role"]
+    Terraform --> IAM["IAM Roles + OIDC Provider"]
 ```
 
-Terraform provisions the AWS infrastructure, while GitHub Actions handles application delivery. This keeps infrastructure management and application deployment as separate concerns.
+Terraform provisions the AWS infrastructure, while GitHub Actions handles application delivery. This keeps infrastructure management and application deployment as separate concerns. GitHub Actions authenticates to AWS via OIDC (no long-lived AWS credentials stored in GitHub) and deploys through AWS Systems Manager rather than SSH - see [Deployment](#deployment) and [`docs/deployment.md`](docs/deployment.md) for the full mechanism.
 
 ## Tech Stack
 
@@ -221,6 +224,7 @@ Pull Request / Push
           ▼
 ┌───────────────────┐
 │ Deploy to EC2     │
+│ (OIDC + SSM)      │
 └───────────────────┘
 ```
 
@@ -285,10 +289,15 @@ The API uses:
 
 The infrastructure includes:
 
-* Restricted SSH access
+* GitHub Actions authenticates to AWS via OIDC - no long-lived AWS access
+  keys stored as GitHub Secrets (see [Deployment](#deployment))
+* Deployment happens through AWS Systems Manager, not SSH, so no inbound
+  port is needed for CI to reach the host
+* Restricted SSH access (kept for human operators/troubleshooting, not
+  used by the deploy pipeline)
 * Security groups
 * IMDSv2
-* IAM roles
+* IAM roles scoped to least privilege (see [Deployment](#deployment))
 * No publicly exposed PostgreSQL port
 
 PostgreSQL is accessible only through the internal Docker network.
@@ -302,7 +311,9 @@ Terraform provisions a small AWS environment consisting of:
 * Internet Gateway
 * Route table
 * Security group
-* IAM role
+* IAM roles (EC2 instance role for SSM; a separate role GitHub Actions
+  assumes via OIDC for deployment)
+* IAM OIDC identity provider (`token.actions.githubusercontent.com`)
 * EC2 instance
 * Elastic IP
 
@@ -338,13 +349,23 @@ The deployment workflow:
 3. Builds Docker images
 4. Tags images with the commit SHA
 5. Pushes images to GHCR
-6. Connects to EC2 over SSH
-7. Pulls the exact SHA-tagged images
-8. Starts the new application version
+6. Authenticates to AWS via OIDC (no stored AWS credentials) and assumes a
+   dedicated, narrowly-scoped IAM role
+7. Deploys through AWS Systems Manager Run Command - not SSH
+8. Pulls the exact SHA-tagged images and starts the new application version
 
-The deployment host pulls the public GHCR images without storing registry credentials.
+The deployment host pulls the public GHCR images without storing registry credentials, and requires zero GitHub Secrets to deploy.
 
-Detailed setup, required GitHub Secrets and rollback procedures are documented in:
+The current deployment is live at the URL from `terraform output
+application_url` (run from `infrastructure/terraform`) - that output, not a
+hardcoded address in this document, is the source of truth, since the
+Elastic IP is tied to whichever AWS account actually applied the
+configuration.
+
+Full detail on the OIDC trust relationship, the `production` GitHub
+Environment's role in it, the SSM mechanism, and rollback procedures - plus
+a couple of known gaps in the current setup worth reading before relying on
+it - is documented in:
 
 [`docs/deployment.md`](docs/deployment.md)
 
