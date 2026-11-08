@@ -5,14 +5,14 @@
 # docker-compose.yml is configured accordingly.
 
 # ---- deps: install full dependency tree used to build ----
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache openssl
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
 
 # ---- build: compile TypeScript and generate the Prisma client ----
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
@@ -22,7 +22,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # ---- production: minimal runtime image ----
-FROM node:20-alpine AS production
+FROM node:26-alpine AS production
 WORKDIR /app
 # Apply available fixes in this Alpine release before installing runtime tools.
 RUN apk upgrade --no-cache musl musl-utils zlib \
