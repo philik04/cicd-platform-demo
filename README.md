@@ -4,12 +4,35 @@ A production-style full-stack application demonstrating a complete DevOps lifecy
 
 **GitHub Actions · Docker · Terraform · AWS · PostgreSQL · TypeScript**
 
-[![CI/CD](https://github.com/OWNER/cicd-platform-demo/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/OWNER/cicd-platform-demo/actions/workflows/ci-cd.yml)
+[![CI/CD](https://github.com/philik04/cicd-platform-demo/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/philik04/cicd-platform-demo/actions/workflows/ci-cd.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-20.x-339933?logo=node.js\&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript\&logoColor=white)
+![Node](https://img.shields.io/badge/node-20.x-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
 
-> Replace `OWNER` with your GitHub username or organization before publishing.
+## At a glance
+
+**Portfolio focus:** A React/TypeScript service-status dashboard backed by an Express API and PostgreSQL, used to demonstrate tested, repeatable delivery rather than a production SaaS service.
+
+- **Build and quality gates:** GitHub Actions runs linting, type checks, tests and security scans before publishing container images.
+- **Release and infrastructure:** Commit-SHA images in GHCR, Terraform-managed AWS resources, OIDC authentication and SSM-based deployments without CI-side SSH.
+- **Reliability:** Health/readiness endpoints, structured logging and documented rollback.
+- **Scope:** Single-EC2 learning/demo architecture, **not** a multi-AZ production platform. See [known gaps](docs/deployment.md#known-gaps).
+
+**Explore:** [CI workflow](.github/workflows/ci-cd.yml) · [Workflow runs](https://github.com/philik04/cicd-platform-demo/actions/workflows/ci-cd.yml) · [Deployment runbook](docs/deployment.md) · [Backend code](backend) · [Frontend code](frontend)
+
+**Try it locally** (Docker + Docker Compose required):
+
+```bash
+test -e .env || cp .env.example .env
+docker compose up --build
+```
+
+With the default ports, open the [dashboard](http://localhost:8080) or check
+[API health](http://localhost:4000/api/health). The command above preserves an
+existing `.env` file. See [Quick Start](#quick-start) for the full setup details.
+
+AWS demo availability depends on the operator's provisioned infrastructure; see
+[Deployment](#deployment) for how to obtain that environment's URL.
 
 ## Overview
 
@@ -148,14 +171,16 @@ cicd-platform-demo/
 ### Run the complete stack
 
 ```bash
-cp .env.example .env
+test -e .env || cp .env.example .env
 docker compose up --build
 ```
 
-The application will then be available at:
+The copy step preserves an existing `.env` file. With the default ports, the
+application will then be available at:
 
 * Frontend: `http://localhost:8080`
-* Backend API: `http://localhost:4000/api`
+* API health: `http://localhost:4000/api/health`
+* Service API: `http://localhost:4000/api/services`
 * PostgreSQL: `localhost:5432`
 
 The database port is exposed for local development only and is not exposed in the production configuration.
@@ -356,11 +381,10 @@ The deployment workflow:
 
 The deployment host pulls the public GHCR images without storing registry credentials, and requires zero GitHub Secrets to deploy.
 
-The current deployment is live at the URL from `terraform output
-application_url` (run from `infrastructure/terraform`) - that output, not a
-hardcoded address in this document, is the source of truth, since the
-Elastic IP is tied to whichever AWS account actually applied the
-configuration.
+If the AWS environment is currently provisioned, its application URL can be
+obtained with `terraform output application_url` from `infrastructure/terraform`.
+This is an operator-specific output, not a guaranteed permanent public demo link.
+See the [local quick start](#quick-start) for a reproducible way to inspect the application.
 
 Full detail on the OIDC trust relationship, the `production` GitHub
 Environment's role in it, the SSM mechanism, and rollback procedures - plus
