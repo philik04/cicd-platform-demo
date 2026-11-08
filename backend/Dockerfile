@@ -24,7 +24,9 @@ RUN npm prune --omit=dev
 # ---- production: minimal runtime image ----
 FROM node:20-alpine AS production
 WORKDIR /app
-RUN apk add --no-cache openssl \
+# Apply available fixes in this Alpine release before installing runtime tools.
+RUN apk upgrade --no-cache musl musl-utils zlib \
+    && apk add --no-cache openssl \
     && addgroup -S appgroup \
     && adduser -S appuser -G appgroup \
     # npm is not used at runtime (the entrypoint invokes Prisma's CLI
