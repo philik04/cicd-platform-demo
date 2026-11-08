@@ -20,7 +20,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ---- production: static assets served by an unprivileged nginx ----
-FROM nginxinc/nginx-unprivileged:1.30-alpine AS production
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS production
 
 # Patch the runtime libraries reported by Trivy without changing the nginx line.
 USER root
