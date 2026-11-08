@@ -22,6 +22,11 @@ RUN npm run build
 # ---- production: static assets served by an unprivileged nginx ----
 FROM nginxinc/nginx-unprivileged:1.30-alpine AS production
 
+# Patch the runtime libraries reported by Trivy without changing the nginx line.
+USER root
+RUN apk upgrade --no-cache brotli-libs curl libcurl libexpat musl musl-utils zlib
+USER nginx
+
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 

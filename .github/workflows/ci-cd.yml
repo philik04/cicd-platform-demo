@@ -261,7 +261,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.workspace }}
           cache-to: type=gha,mode=max,scope=${{ matrix.workspace }}
 
-      - name: Scan image with Trivy
+      - name: Generate Trivy SARIF report
         # Pinned to a commit SHA (not just a tag) since this action has
         # security-events: write access to the Security tab - verified
         # against the official v0.36.0 release tag:
@@ -271,9 +271,19 @@ jobs:
           image-ref: ${{ matrix.image }}:scan
           format: sarif
           output: trivy-${{ matrix.workspace }}.sarif
+          ignore-unfixed: true
+          # SARIF includes all severities; enforce the threshold separately.
+          exit-code: "0"
+
+      - name: Enforce high and critical container vulnerability gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:scan
+          format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+          skip-setup-trivy: true
 
       - name: Upload Trivy results to GitHub Security tab
         if: always()
